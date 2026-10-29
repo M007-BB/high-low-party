@@ -81,7 +81,9 @@
         }
 
         function startRound() {
-            socket.emit('start_round', { room: myRoom });
+    console.log("Room ที่กำลังจะส่ง:", myRoom); // เช็กว่ามีชื่อห้องไหม
+    socket.emit('start_round', { room: myRoom });
+}
         }
 
         function makeChoice(choice) {
