@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Low Party Hub 🍻</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding: 20px; margin: 0; }
+        .card-box { font-size: 50px; font-weight: bold; background: #1e1e1e; border: 3px solid #ff4b4b; border-radius: 16px; padding: 15px; margin: 15px auto; width: 100px; display: inline-block; }
+        .btn { padding: 15px 25px; font-size: 18px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; margin: 8px; width: 42%; }
+        .btn-high { background: #2e7d32; color: white; }
+        .btn-low { background: #c62828; color: white; }
+        .btn-start { background: #ff9800; color: white; width: 90%; margin-top: 15px; }
+        .result-box { border-radius: 12px; padding: 15px; margin-top: 15px; text-align: left; }
+        .wrong-list { background: #2c0b0e; border: 2px solid #ef5350; color: #ffcdd2; }
+        .survived-list { background: #0b2c13; border: 2px solid #4ade80; color: #d1fae5; }
+        .hidden { display: none; }
+        .container { max-width: 400px; margin: 0 auto; background: #1a1a1a; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        input { padding: 12px; font-size: 16px; width: 80%; border-radius: 8px; border: 1px solid #444; background: #222; color: white; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- หน้า Login / เข้าห้อง -->
+        <div id="loginSection">
+            <h2>🍻 วง High-Low ปาร์ตี้</h2>
+            <p style="color: #4ade80; font-size: 14px;" id="roomDisplayText">กำลังเข้าสู่ห้อง...</p>
+            <input type="text" id="username" placeholder="พิมพ์ชื่อเล่นของคุณ"><br><br>
+            <button class="btn btn-start" onclick="joinGame()">เข้าสู่ห้องทันที</button>
+        </div>
+
+        <!-- หน้ากระดานเล่นเกม -->
+        <div id="gameSection" class="hidden">
+            <h3 style="margin: 0;">🃏 ไพ่ตั้งต้นกลางจอ</h3>
+            <div class="card-box" id="baseCard">?</div>
+            
+            <h3 id="timerText" style="color: #ffeb3b; margin: 10px 0;">รอเริ่มรอบใหม่...</h3>
+
+            <div id="controls">
+                <button class="btn btn-high" onclick="makeChoice('HIGH')">⬆️ สูงกว่า</button>
+                <button class="btn btn-low" onclick="makeChoice('LOW')">⬇️ ต่ำกว่า</button>
+            </div>
+
+            <div id="myResult" style="margin-top: 10px; font-size: 16px; color: #4ade80; font-weight: bold;"></div>
+
+            <!-- กล่องแสดงรายชื่อคนทายผิด -->
+            <div id="wrongSection" class="result-box wrong-list hidden">
+                <h3 style="margin: 0 0 10px 0; color: #ff5252; text-align: center;">💥 คนทายผิด (ดื่ม!):</h3>
+                <ul id="wrongList" style="padding-left: 20px; margin: 0; font-size: 16px; font-weight: bold;"></ul>
+            </div>
+
+            <!-- กล่องแสดงรายชื่อคนรอด -->
+            <div id="survivedSection" class="result-box survived-list hidden">
+                <h3 style="margin: 0 0 10px 0; color: #4ade80; text-align: center;">✨ คนรอด (ปลอดภัย):</h3>
+                <ul id="survivedList" style="padding-left: 20px; margin: 0; font-size: 16px; font-weight: bold;"></ul>
+            </div>
+
+            <button class="btn btn-start" onclick="startRound()">🎲 เริ่มเปิดรอบใหม่!</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        
+        const pathSegments = window.location.pathname.split('/');
+        const myRoom = pathSegments[pathSegments.length - 1];
+        
+        document.getElementById('roomDisplayText').innerText = `📌 รหัสห้อง: ${myRoom}`;
+
+        function joinGame() {
+            const name = document.getElementById('username').value.trim();
+            if (!name) {
+                alert('กรุณาใส่ชื่อก่อนเข้าเกม!');
+                return;
+            }
+            socket.emit('join_game', { username: name, room: myRoom });
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('gameSection').classList.remove('hidden');
+        }
+
+        function startRound() {
+            socket.emit('start_round', { room: myRoom });
+        }
+
+        function makeChoice(choice) {
+            socket.emit('submit_choice', { room: myRoom, choice: choice });
+            document.getElementById('myResult').innerText = `✅ คุณเลือก: ${choice === 'HIGH' ? '⬆️ สูงกว่า' : '⬇️ ต่ำกว่า'}`;
+        }
+
+        socket.on('round_started', (data) => {
+            document.getElementById('baseCard').innerText = formatCard(data.base_card);
+            document.getElementById('controls').style.display = 'block';
+            document.getElementById('wrongSection').classList.add('hidden');
+            document.getElementById('survivedSection').classList.add('hidden');
+            document.getElementById('myResult').innerText = '';
+            
+            let timeLeft = data.time_limit;
+            document.getElementById('timerText').innerText = `⏱️ เหลือเวลา: ${timeLeft} วินาที`;
+            
+            clearInterval(window.timerInterval);
+            window.timerInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    document.getElementById('timerText').innerText = `⏱️ เหลือเวลา: ${timeLeft} วินาที`;
+                } else {
+                    clearInterval(window.timerInterval);
+                    document.getElementById('timerText').innerText = "⏳ หมดเวลา! กำลังเปิดไพ่...";
+                    document.getElementById('controls').style.display = 'none';
+                    socket.emit('time_up', { room: myRoom });
+                }
+            }, 1000);
+        });
+
+        socket.on('show_results', (data) => {
+            const wrongList = document.getElementById('wrongList');
+            const survivedList = document.getElementById('survivedList');
+            
+            wrongList.innerHTML = '';
+            survivedList.innerHTML = '';
+
+            if (data.wrong_players.length === 0) {
+                wrongList.innerHTML = '<li style="list-style: none; text-align: center;">ไม่มีคนทายผิดรอบนี้ 🎉</li>';
+            } else {
+                data.wrong_players.forEach(p => {
+                    const li = document.createElement('li');
+                    li.innerText = `${p.name} (ได้ไพ่ ${formatCard(p.card)})`;
+                    wrongList.appendChild(li);
+                });
+            }
+
+            if (data.survived_players.length === 0) {
+                survivedList.innerHTML = '<li style="list-style: none; text-align: center;">ไม่มีคนรอดเลย 💀</li>';
+            } else {
+                data.survived_players.forEach(p => {
+                    const li = document.createElement('li');
+                    li.innerText = `${p.name} (ได้ไพ่ ${formatCard(p.card)})`;
+                    survivedList.appendChild(li);
+                });
+            }
+
+            document.getElementById('wrongSection').classList.remove('hidden');
+            document.getElementById('survivedSection').classList.remove('hidden');
+            document.getElementById('timerText').innerText = "🏁 จบรอบแล้ว!";
+        });
+
+        function formatCard(val) {
+            if (val === 11) return 'J';
+            if (val === 12) return 'Q';
+            if (val === 13) return 'K';
+            if (val === 14) return 'A';
+            return val;
+        }
+    </script>
+</body>
+</html>
