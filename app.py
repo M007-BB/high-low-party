@@ -44,7 +44,6 @@ def handle_join(data):
     }
 
 @socketio.on('start_round')
-@socketio.on('start_round')
 def handle_start_round(data):
     # เช็กป้องกันกรณี data เป็นค่าว่างหรือไม่ส่ง room มา
     if not data or 'room' not in data:
