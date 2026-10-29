@@ -44,9 +44,15 @@ def handle_join(data):
     }
 
 @socketio.on('start_round')
+@socketio.on('start_round')
 def handle_start_round(data):
+    # เช็กป้องกันกรณี data เป็นค่าว่างหรือไม่ส่ง room มา
+    if not data or 'room' not in data:
+        return
+
     room = data['room']
     if room in rooms:
+        # โค้ดเดิมของคุณต่อตรงนี้ได้เลย
         base_card = random.choice(DECK)
         rooms[room]['base_card'] = base_card
         rooms[room]['status'] = 'guessing'
